@@ -21,8 +21,8 @@ def create_zoom_session(resource: str, body: dict) -> dict:
 		create_request_log(data, is_remote_request=1, service_name="Zoom", status="Completed")
 		return data
 
-	create_request_log(response.text, is_remote_request=1, service_name="Zoom", status="Failed")
-	frappe.throw(f"Failed to create {resource[:-1]} on Zoom: {response.text}")
+	log_failed_response(response)
+	frappe.throw(f"Failed to create {resource[:-1]} on Zoom ({response.status_code}): {response.text}")
 
 
 def update_zoom_session(resource: str, session_id: str, body: dict) -> None:
@@ -53,8 +53,8 @@ def add_zoom_registrant(resource: str, session_id: str, body: dict) -> dict:
 	response = requests.post(url, headers=headers, data=json.dumps(body))
 
 	if response.status_code not in (200, 201):
-		create_request_log(response.text, is_remote_request=1, service_name="Zoom", status="Failed")
-		frappe.throw(f"Failed to add registrant on Zoom: {response.text}")
+		log_failed_response(response)
+		frappe.throw(f"Failed to add registrant on Zoom ({response.status_code}): {response.text}")
 
 	data = response.json()
 	create_request_log(data, is_remote_request=1, service_name="Zoom", status="Completed")
@@ -95,3 +95,15 @@ def get_zoom_participants(resource: str, session_uuid: str) -> list[dict]:
 	encoded_uuid = quote(session_uuid, safe="")
 	url = f"{ZOOM_API_BASE_PATH}/past_{resource}/{encoded_uuid}/participants?page_size={DEFAULT_PAGE_SIZE}"
 	return _paginate(url, "participants")
+
+
+def log_failed_response(response) -> None:
+	"""Log a failed Zoom call. Its body is not always JSON (a gateway error is HTML or
+	empty), and `create_request_log` parses a string as JSON, so the body goes in as text."""
+	create_request_log(
+		{"status_code": response.status_code},
+		is_remote_request=1,
+		service_name="Zoom",
+		status="Failed",
+		error=response.text,
+	)

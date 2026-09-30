@@ -12,6 +12,7 @@ from frappe.model.document import Document
 from frappe.utils import cint, format_datetime, getdate
 from frappe.utils.data import convert_utc_to_timezone, get_datetime, get_time
 
+from zoom_integration.api import log_failed_response
 from zoom_integration.utils import ZOOM_API_BASE_PATH, get_authenticated_headers_for_zoom
 
 ATTENDANCE_SYNC_BATCH_SIZE = 300  # Zoom API allows max 300 per page
@@ -83,13 +84,8 @@ class ZoomWebinar(Document):
 			frappe.msgprint(_("Webinar created successfully on Zoom."))
 			create_request_log(data, is_remote_request=1, service_name="Zoom", status="Completed")
 		else:
-			create_request_log(
-				response.text,
-				is_remote_request=1,
-				service_name="Zoom",
-				status="Failed",
-			)
-			frappe.throw("Failed to create webinar on Zoom: {0}".format(response.text))
+			log_failed_response(response)
+			frappe.throw(f"Failed to create webinar on Zoom ({response.status_code}): {response.text}")
 
 	def on_update(self):
 		if not self.zoom_webinar_id:
@@ -227,13 +223,8 @@ class ZoomWebinar(Document):
 		response = requests.post(url, headers=headers, data=body)
 
 		if response.status_code not in (200, 201):
-			create_request_log(
-				response.text,
-				is_remote_request=1,
-				service_name="Zoom",
-				status="Failed",
-			)
-			frappe.throw(frappe._(f"Failed to add registrant: {response.text}"))
+			log_failed_response(response)
+			frappe.throw(frappe._(f"Failed to add registrant ({response.status_code}): {response.text}"))
 
 		data = response.json()
 		create_request_log(data, is_remote_request=1, service_name="Zoom", status="Completed")
